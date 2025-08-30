@@ -243,14 +243,5 @@ After this playbook runs successfully on both VMs:
 1. ✅ **ansible user created** with sudo access and SSH keys
 2. ✅ **Docker installed** and running
 3. ✅ **Docker Compose installed** (both plugin and standalone)
-4. ✅ **Your Dockerfile copied** to both VMs
+4. ✅ **Dockerfile copied** to both VMs
 5. ✅ **Everything verified** and ready to use
-
-You can now SSH to either VM as the ansible user and run Docker commands without sudo:
-```bash
-ssh ansible@192.168.112.128
-docker --version
-docker-compose --version
-cd docker
-cat Dockerfile
-```
