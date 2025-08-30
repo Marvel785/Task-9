@@ -1,0 +1,121 @@
+---
+- name: Setup ansible user and install Docker on Ubuntu VMs
+  hosts: prod
+  become: yes
+  vars:
+    docker_compose_version: "2.21.0"
+
+  tasks:
+    - name: Update apt package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+    - name: Create ansible user
+      user:
+        name: ansible
+        shell: /bin/bash
+        home: /home/ansible
+        createhome: yes
+        state: present
+    - name: Add ansible user to sudo group
+      user:
+        name: ansible
+        groups: sudo
+        append: yes
+    - name: Create .ssh directory for ansible user
+      file:
+        path: /home/ansible/.ssh
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0700'
+    - name: Copy authorized_keys from current user to ansible user
+      copy:
+        src: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+        dest: /home/ansible/.ssh/authorized_keys
+        owner: ansible
+        group: ansible
+        mode: '0600'
+        remote_src: yes
+    - name: Add ansible user to sudoers with NOPASSWD
+      lineinfile:
+        path: /etc/sudoers.d/ansible
+        create: yes
+        line: 'ansible ALL=(ALL) NOPASSWD:ALL'
+        mode: '0440'
+        validate: 'visudo -cf %s'
+    - name: Install required packages for Ubuntu
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+        state: present
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+    - name: Add Docker's official GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+    - name: Install Docker CE on Ubuntu
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+    - name: Install Docker Compose (standalone)
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+    - name: Create docker-compose symlink
+      file:
+        src: /usr/local/bin/docker-compose
+        dest: /usr/bin/docker-compose
+        state: link
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+    - name: Add ansible user to docker group
+      user:
+        name: ansible
+        groups: docker
+        append: yes
+    - name: Create docker directory
+      file:
+        path: /home/ansible/docker
+        state: directory
+        owner: ansible
+        group: ansible
+        mode: '0755'
+    - name: Copy Dockerfile
+      copy:
+        src: ./Dockerfile
+        dest: /home/ansible/docker/Dockerfile
+        owner: ansible
+        group: ansible
+        mode: '0644'
+    - name: Verify Docker installation
+      command: docker --version
+      register: docker_version
+      become_user: ansible
+    - name: Display Docker version
+      debug:
+        msg: "Docker installed successfully: {{ docker_version.stdout }}"
